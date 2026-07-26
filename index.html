@@ -37,6 +37,9 @@
         <video id="video" autoplay muted playsinline></video>
         <canvas id="overlay" class="overlay"></canvas>
         <div class="status-badge" id="statusBadge">Memuat model...</div>
+        <div class="record-progress" id="recordProgress" style="display:none;">
+          <div class="record-progress-fill" id="recordFill"></div>
+        </div>
       </div>
 
       <div id="profileBox" class="profile-box" style="display:none;">
@@ -46,6 +49,15 @@
           <span id="profileNip">NIP: -</span>
           <span id="profileSkpd">-</span>
           <span id="profileBagian">-</span>
+        </div>
+      </div>
+
+      <div id="notRecognizedBox" class="not-recognized-box" style="display:none;">
+        <div style="font-size:28px;">⚠️</div>
+        <p>Wajah tidak dikenali. Pastikan wajah terlihat jelas dan pencahayaan cukup.</p>
+        <div class="btn-row">
+          <button class="btn btn-outline" id="btnCobaUlang">🔄 Coba Ulang</button>
+          <button class="btn btn-primary" id="btnDaftarWajah">➕ Buat Rekam Wajah</button>
         </div>
       </div>
 
@@ -88,8 +100,16 @@
     let currentMatch = null;
     let currentPosition = null;
     let detecting = false;
-    let stableCount = 0;
-    const STABLE_THRESHOLD = 3;
+
+    // ---------- Rekam wajah 3 detik ----------
+    const RECORD_DURATION_MS = 3000;
+    let recording = false;
+    let recordStartTime = null;
+    let recordSamples = [];      // kumpulan label hasil pencocokan tiap frame selama rekam
+    let showingResult = false;   // true saat profil / notifikasi gagal sedang ditampilkan (loop deteksi berhenti sementara)
+    const recordProgress = document.getElementById('recordProgress');
+    const recordFill = document.getElementById('recordFill');
+    const notRecognizedBox = document.getElementById('notRecognizedBox');
 
     function showToast(msg, type) {
       const t = document.getElementById('toast');
@@ -192,9 +212,9 @@
       btnMasuk.disabled = true;
       btnPulang.disabled = true;
       currentMatch = null;
-      stableCount = 0;
     }
     function showProfile(pegawai) {
+      currentMatch = pegawai;
       document.getElementById('profileFoto').src = pegawai.foto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(pegawai.nama);
       document.getElementById('profileNama').textContent = pegawai.nama;
       document.getElementById('profileNip').textContent = 'NIP: ' + pegawai.nip;
@@ -205,9 +225,48 @@
       btnPulang.disabled = false;
     }
 
+    // Reset seluruh state ke kondisi awal (siap mendeteksi wajah lagi)
+    function kembaliKeIdle_() {
+      showingResult = false;
+      recording = false;
+      recordStartTime = null;
+      recordSamples = [];
+      recordProgress.style.display = 'none';
+      notRecognizedBox.style.display = 'none';
+      resetProfile();
+      setStatus('Arahkan wajah ke kamera');
+    }
+
+    // Cari label (NIP) yang paling sering muncul selama 3 detik rekam
+    function labelTerbanyak_(samples) {
+      const count = {};
+      samples.forEach(l => { count[l] = (count[l] || 0) + 1; });
+      let best = null, bestCount = 0;
+      Object.keys(count).forEach(k => {
+        if (count[k] > bestCount) { best = k; bestCount = count[k]; }
+      });
+      return { label: best, ratio: samples.length ? bestCount / samples.length : 0 };
+    }
+
+    function tampilkanGagalKenali_() {
+      showingResult = true;
+      recordProgress.style.display = 'none';
+      resetProfile();
+      notRecognizedBox.style.display = 'block';
+      setStatus('⚠️ Wajah tidak dikenali', 'err');
+    }
+
     async function detectLoop() {
       if (detecting) { requestAnimationFrame(detectLoop); return; }
       detecting = true;
+
+      // Kalau sedang menampilkan hasil (profil atau notifikasi gagal), jangan proses deteksi baru
+      if (showingResult) {
+        detecting = false;
+        requestAnimationFrame(detectLoop);
+        return;
+      }
+
       const displaySize = { width: video.clientWidth, height: video.clientHeight };
       faceapi.matchDimensions(overlay, displaySize);
       try {
@@ -222,22 +281,46 @@
         if (detection && faceMatcher) {
           const resized = faceapi.resizeResults(detection, displaySize);
           new faceapi.draw.DrawBox(resized.detection.box, { label: '', boxColor: '#22c55e' }).draw(overlay);
-          const best = faceMatcher.findBestMatch(detection.descriptor);
-          if (best.label !== 'unknown') {
-            const pegawai = pegawaiList.find(p => p.nip === best.label);
-            setStatus('✅ Wajah dikenali', 'ok');
-            if (currentMatch && currentMatch.nip === pegawai.nip) { stableCount++; }
-            else { currentMatch = pegawai; stableCount = 1; }
-            if (stableCount >= STABLE_THRESHOLD) showProfile(pegawai);
-          } else {
-            setStatus('⚠️ Wajah tidak dikenali', 'err');
-            resetProfile();
+
+          // Mulai rekam 3 detik begitu wajah pertama kali terdeteksi
+          if (!recording) {
+            recording = true;
+            recordStartTime = performance.now();
+            recordSamples = [];
+            recordProgress.style.display = 'block';
           }
-        } else if (detection) {
-          setStatus('Mendeteksi wajah...');
+
+          const best = faceMatcher.findBestMatch(detection.descriptor);
+          recordSamples.push(best.label);
+
+          const elapsed = performance.now() - recordStartTime;
+          const pct = Math.min(100, (elapsed / RECORD_DURATION_MS) * 100);
+          recordFill.style.width = pct + '%';
+          setStatus('🎥 Merekam wajah... ' + Math.min(3, (elapsed / 1000)).toFixed(1) + 's / 3.0s');
+
+          if (elapsed >= RECORD_DURATION_MS) {
+            const hasil = labelTerbanyak_(recordSamples);
+            recording = false;
+            recordProgress.style.display = 'none';
+
+            if (hasil.label && hasil.label !== 'unknown' && hasil.ratio >= 0.5) {
+              const pegawai = pegawaiList.find(p => p.nip === hasil.label);
+              showingResult = true;
+              setStatus('✅ Wajah dikenali', 'ok');
+              showProfile(pegawai);
+            } else {
+              tampilkanGagalKenali_();
+            }
+          }
         } else {
+          // Wajah hilang dari kamera sebelum 3 detik selesai -> batalkan rekaman, ulangi dari awal
+          if (recording) {
+            recording = false;
+            recordStartTime = null;
+            recordSamples = [];
+            recordProgress.style.display = 'none';
+          }
           setStatus('Arahkan wajah ke kamera');
-          resetProfile();
         }
       } catch (e) { console.error(e); }
       detecting = false;
@@ -269,11 +352,15 @@
       } catch (err) {
         showToast('Gagal mengirim: ' + err.message, 'error');
       }
-      resetProfile();
+      kembaliKeIdle_();
     }
 
     btnMasuk.addEventListener('click', () => kirimAbsen('Masuk'));
     btnPulang.addEventListener('click', () => kirimAbsen('Pulang'));
+    document.getElementById('btnCobaUlang').addEventListener('click', kembaliKeIdle_);
+    document.getElementById('btnDaftarWajah').addEventListener('click', () => {
+      window.location.href = 'admin.html';
+    });
 
     async function mulaiAplikasi() {
       document.getElementById('startCard').style.display = 'none';
