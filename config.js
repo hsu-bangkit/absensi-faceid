@@ -3,7 +3,7 @@
 // Anda, yang didapat setelah Deploy > New deployment.
 // Contoh: 'https://script.google.com/macros/s/AKfycbx.../exec'
 // =======================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzaiz1Oz12QSgoX728uzBOSUuGfZRBPnlLryB708UgMQ12elIyuZMu8vN06oRSSa30eHQ/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxSFKsbV-6B9WI59dydmJORcQ6dNQ4-A-C3bcyaOOQWFLfjgATz6DErJ85uckq53xUWw/exec';
 
 // ---------- Helper pemanggilan API ----------
 function apiGet(action, params) {
