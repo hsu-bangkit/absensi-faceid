@@ -3,62 +3,135 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kelola Pegawai - Absensi Face ID</title>
+  <title>Panel Admin - Absensi Face ID</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div class="app-header">
-    <h1>⚙️ Kelola Pegawai</h1>
-    <p>Tambah pegawai baru & daftarkan wajah</p>
-  </div>
+  <div class="admin-layout">
 
-  <div class="nav-tabs">
-    <a href="index.html">Absen</a>
-    <a href="rekap.html">Rekap Hari Ini</a>
-    <a href="admin.html" class="active">Kelola Pegawai</a>
-    <a href="setting.html">Lokasi</a>
-  </div>
+    <div class="sidebar" id="sidebar">
+      <div class="brand">⚙️ Panel Admin</div>
+      <nav>
+        <a href="#" class="nav-item active" data-section="pegawai">👥 Data Pegawai</a>
+        <a href="#" class="nav-item" data-section="absen">🗂️ Data Absen</a>
+        <a href="#" class="nav-item" data-section="lokasi">📍 Atur Radius Lokasi</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="index.html">← Kembali ke Halaman Absen</a>
+      </div>
+    </div>
 
-  <div class="container">
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-    <div class="card">
-      <h3 style="margin-top:0;">Form Data Pegawai</h3>
-      <label>NIP</label>
-      <input type="text" id="fNip" placeholder="Contoh: 198501012010011001">
-      <label>Nama</label>
-      <input type="text" id="fNama" placeholder="Nama lengkap">
-      <label>SKPD</label>
-      <input type="text" id="fSkpd" placeholder="Contoh: Dinas Komunikasi dan Informatika">
-      <label>Bagian</label>
-      <input type="text" id="fBagian" placeholder="Contoh: Bidang Data dan Aplikasi">
-
-      <div id="camStartBox" style="text-align:center;padding:16px 6px;">
-        <button class="btn btn-primary" id="btnActivateCam">🔓 Aktifkan Kamera</button>
+    <div class="admin-main">
+      <div class="admin-topbar">
+        <button class="hamburger-btn" id="hamburgerBtn">☰</button>
+        <strong id="pageTitle">Data Pegawai</strong>
       </div>
 
-      <div id="camBox" style="display:none;">
-        <div class="video-wrap" id="videoWrap" style="margin:12px 0;">
-          <video id="video" autoplay muted playsinline></video>
-          <canvas id="overlay" class="overlay"></canvas>
-          <div class="status-badge" id="statusBadge">Memuat model...</div>
+      <div class="container">
+
+        <!-- ===================== DATA PEGAWAI ===================== -->
+        <div class="admin-section active" id="section-pegawai">
+          <div class="card">
+            <h3 style="margin-top:0;">Form Data Pegawai</h3>
+            <label>NIP</label>
+            <input type="text" id="fNip" placeholder="Contoh: 198501012010011001">
+            <label>Nama</label>
+            <input type="text" id="fNama" placeholder="Nama lengkap">
+            <label>SKPD</label>
+            <input type="text" id="fSkpd" placeholder="Contoh: Dinas Komunikasi dan Informatika">
+            <label>Bagian</label>
+            <input type="text" id="fBagian" placeholder="Contoh: Bidang Data dan Aplikasi">
+
+            <div id="camStartBox" style="text-align:center;padding:16px 6px;">
+              <button class="btn btn-primary" id="btnActivateCam">🔓 Aktifkan Kamera</button>
+            </div>
+
+            <div id="camBox" style="display:none;">
+              <div class="video-wrap" id="videoWrap" style="margin:12px auto;">
+                <video id="video" autoplay muted playsinline></video>
+                <canvas id="overlay" class="overlay"></canvas>
+                <div class="status-badge" id="statusBadge">Memuat model...</div>
+              </div>
+              <button class="btn btn-outline" id="btnCapture">📷 Ambil & Kenali Wajah</button>
+            </div>
+            <div id="camError" style="display:none;font-size:13px;color:#991b1b;text-align:left;line-height:1.6;margin-top:10px;"></div>
+            <div id="captureInfo" style="text-align:center;font-size:12px;margin-top:8px;color:#6b7280;"></div>
+
+            <div class="btn-row">
+              <button class="btn btn-primary" id="btnSave">💾 Simpan Pegawai</button>
+              <button class="btn btn-outline" id="btnReset">Reset</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-top:0;">Daftar Pegawai Terdaftar</h3>
+            <div id="listPegawai"><div class="empty-state">Memuat...</div></div>
+          </div>
         </div>
-        <button class="btn btn-outline" id="btnCapture">📷 Ambil & Kenali Wajah</button>
-      </div>
-      <div id="camError" style="display:none;font-size:13px;color:#991b1b;text-align:left;line-height:1.6;margin-top:10px;"></div>
-      <div id="captureInfo" style="text-align:center;font-size:12px;margin-top:8px;color:#6b7280;"></div>
 
-      <div class="btn-row">
-        <button class="btn btn-primary" id="btnSave">💾 Simpan Pegawai</button>
-        <button class="btn btn-outline" id="btnReset">Reset</button>
+        <!-- ===================== DATA ABSEN ===================== -->
+        <div class="admin-section" id="section-absen">
+          <div class="card">
+            <h3 style="margin-top:0;">Filter Tanggal</h3>
+            <label>Dari Tanggal</label>
+            <input type="date" id="fTglMulai">
+            <label>Sampai Tanggal</label>
+            <input type="date" id="fTglSelesai">
+            <button class="btn btn-primary" id="btnTampilkanAbsen">🔍 Tampilkan</button>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <h3 style="margin:0;">Rekap Absensi</h3>
+              <button class="icon-btn" id="btnRefreshAbsen">🔄 Muat Ulang</button>
+            </div>
+            <div id="listAbsen" style="margin-top:8px;"><div class="empty-state">Memuat...</div></div>
+          </div>
+        </div>
+
+        <!-- ===================== ATUR RADIUS LOKASI ===================== -->
+        <div class="admin-section" id="section-lokasi">
+          <div class="card">
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="fAktif" style="width:auto;margin:0;"> Batasi absen hanya di sekitar kantor
+            </label>
+            <p style="font-size:12px;color:#6b7280;margin-top:-4px;">
+              Jika dimatikan, pegawai bisa absen dari lokasi mana saja (lokasi tetap dicatat di rekap).
+            </p>
+
+            <div id="lokasiFields">
+              <label>Latitude Kantor</label>
+              <input type="text" id="fLat" placeholder="Contoh: -3.453500">
+              <label>Longitude Kantor</label>
+              <input type="text" id="fLng" placeholder="Contoh: 114.838500">
+              <label>Radius Diizinkan (meter)</label>
+              <input type="number" id="fRadius" value="200" min="10" step="10">
+              <button class="btn btn-outline" id="btnUseMyLoc">📍 Gunakan Lokasi Saya Sekarang</button>
+              <div id="locStatus" style="font-size:12px;color:#6b7280;margin-top:8px;text-align:center;"></div>
+            </div>
+
+            <button class="btn btn-primary" id="btnSaveSetting" style="margin-top:14px;">💾 Simpan Pengaturan</button>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-top:0;">Cara Menentukan Titik Kantor</h3>
+            <ol style="font-size:13px;color:#374151;padding-left:18px;line-height:1.7;">
+              <li>Buka halaman ini <b>dari lokasi kantor</b> menggunakan HP Anda.</li>
+              <li>Klik tombol <b>"Gunakan Lokasi Saya Sekarang"</b> — koordinat akan otomatis terisi.</li>
+              <li>Atur radius sesuai luas area kantor (misal 100-300 meter).</li>
+              <li>Klik <b>Simpan Pengaturan</b>.</li>
+            </ol>
+            <p style="font-size:12px;color:#6b7280;">
+              Alternatif: cari koordinat lewat Google Maps → tekan lama titik lokasi kantor → salin angka koordinat yang muncul → tempel ke kolom Latitude/Longitude di atas.
+            </p>
+          </div>
+        </div>
+
       </div>
     </div>
-
-    <div class="card">
-      <h3 style="margin-top:0;">Daftar Pegawai Terdaftar</h3>
-      <div id="listPegawai"><div class="empty-state">Memuat...</div></div>
-    </div>
-
   </div>
 
   <div class="toast" id="toast"></div>
@@ -66,12 +139,27 @@
   <script src="config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <script>
-    const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
-    const video = document.getElementById('video');
-    const statusBadge = document.getElementById('statusBadge');
-    const captureInfo = document.getElementById('captureInfo');
-    let capturedDescriptor = null;
-    let capturedFoto = null;
+    // ================= SIDEBAR =================
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const pageTitle = document.getElementById('pageTitle');
+
+    function openSidebar() { sidebar.classList.add('open'); overlay.classList.add('show'); }
+    function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('show'); }
+    document.getElementById('hamburgerBtn').addEventListener('click', openSidebar);
+    overlay.addEventListener('click', closeSidebar);
+
+    document.querySelectorAll('.nav-item').forEach((a) => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.querySelectorAll('.nav-item').forEach((x) => x.classList.remove('active'));
+        a.classList.add('active');
+        document.querySelectorAll('.admin-section').forEach((s) => s.classList.remove('active'));
+        document.getElementById('section-' + a.dataset.section).classList.add('active');
+        pageTitle.textContent = a.textContent.trim();
+        closeSidebar();
+      });
+    });
 
     function showToast(msg, type) {
       const t = document.getElementById('toast');
@@ -79,6 +167,15 @@
       t.className = 'toast show ' + (type || 'info');
       setTimeout(() => { t.className = 'toast'; }, 3500);
     }
+
+    // ================= DATA PEGAWAI (kamera + form) =================
+    const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+    const video = document.getElementById('video');
+    const statusBadge = document.getElementById('statusBadge');
+    const captureInfo = document.getElementById('captureInfo');
+    let capturedDescriptor = null;
+    let capturedFoto = null;
+
     function setStatus(text, cls) {
       statusBadge.textContent = text;
       statusBadge.className = 'status-badge' + (cls ? ' ' + cls : '');
@@ -87,7 +184,7 @@
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: 480, height: 360 }, audio: false
+          video: { facingMode: 'user', width: { ideal: 360 }, height: { ideal: 480 } }, audio: false
         });
         video.srcObject = stream;
         return new Promise((resolve) => { video.onloadedmetadata = () => resolve(); });
@@ -157,7 +254,7 @@
           nip, nama, skpd, bagian, descriptor: capturedDescriptor, fotoBase64: capturedFoto
         });
         showToast(res.message, res.success ? 'success' : 'error');
-        if (res.success) { resetForm(); loadList(); }
+        if (res.success) { resetForm(); loadListPegawai(); }
       } catch (err) {
         showToast('Gagal: ' + err.message, 'error');
       }
@@ -175,7 +272,7 @@
     }
     document.getElementById('btnReset').addEventListener('click', resetForm);
 
-    async function loadList() {
+    async function loadListPegawai() {
       const el = document.getElementById('listPegawai');
       try {
         const list = await apiGet('getAllPegawai');
@@ -202,7 +299,7 @@
       try {
         const res = await apiPost('deletePegawai', { nip });
         showToast(res.message, res.success ? 'success' : 'error');
-        loadList();
+        loadListPegawai();
       } catch (err) {
         showToast('Gagal: ' + err.message, 'error');
       }
@@ -220,7 +317,104 @@
       }
     });
 
-    loadList();
+    // ================= DATA ABSEN =================
+    function tglHariIni_() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    document.getElementById('fTglMulai').value = tglHariIni_();
+    document.getElementById('fTglSelesai').value = tglHariIni_();
+
+    async function loadAbsen() {
+      const el = document.getElementById('listAbsen');
+      el.innerHTML = '<div class="empty-state"><span class="loader"></span> Memuat...</div>';
+      const mulai = document.getElementById('fTglMulai').value;
+      const selesai = document.getElementById('fTglSelesai').value;
+      try {
+        const list = await apiGet('getRekapRange', { mulai, selesai });
+        if (!list || list.length === 0) {
+          el.innerHTML = '<div class="empty-state">Tidak ada data absensi pada rentang tanggal ini</div>';
+          return;
+        }
+        el.innerHTML = list.map(r => `
+          <div class="list-item">
+            <div>
+              <div class="name">${r.nama} <span class="pill ${r.jenis === 'Masuk' ? 'masuk' : 'pulang'}">${r.jenis}</span></div>
+              <div class="sub">${r.nip} • ${r.skpd} • ${r.bagian}</div>
+              <div class="sub">📅 ${r.tanggal} &nbsp;📍 ${r.alamat || '-'}</div>
+            </div>
+            <div class="sub" style="text-align:right;white-space:nowrap;">${r.waktu}</div>
+          </div>
+        `).join('');
+      } catch (err) {
+        el.innerHTML = '<div class="empty-state">Gagal memuat: ' + err.message + '</div>';
+      }
+    }
+    document.getElementById('btnTampilkanAbsen').addEventListener('click', loadAbsen);
+    document.getElementById('btnRefreshAbsen').addEventListener('click', loadAbsen);
+
+    // ================= ATUR RADIUS LOKASI =================
+    function toggleLokasiFields() {
+      document.getElementById('lokasiFields').style.display = document.getElementById('fAktif').checked ? 'block' : 'none';
+    }
+    document.getElementById('fAktif').addEventListener('change', toggleLokasiFields);
+
+    async function loadSetting() {
+      try {
+        const s = await apiGet('getLocationSettings');
+        document.getElementById('fAktif').checked = !!s.aktif;
+        if (s.lat) document.getElementById('fLat').value = s.lat;
+        if (s.lng) document.getElementById('fLng').value = s.lng;
+        document.getElementById('fRadius').value = s.radius || 200;
+        toggleLokasiFields();
+      } catch (err) {
+        showToast('Gagal memuat pengaturan: ' + err.message, 'error');
+      }
+    }
+
+    document.getElementById('btnUseMyLoc').addEventListener('click', () => {
+      const statusEl = document.getElementById('locStatus');
+      if (!navigator.geolocation) { statusEl.textContent = 'Perangkat tidak mendukung GPS.'; return; }
+      statusEl.innerHTML = '<span class="loader"></span> Mengambil lokasi...';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          document.getElementById('fLat').value = pos.coords.latitude.toFixed(6);
+          document.getElementById('fLng').value = pos.coords.longitude.toFixed(6);
+          statusEl.textContent = '✅ Lokasi berhasil diambil (akurasi ' + Math.round(pos.coords.accuracy) + ' m)';
+        },
+        (err) => {
+          if (err.code === 1) {
+            statusEl.textContent = '❌ Izin lokasi ditolak. Ketuk ikon 🔒/ⓘ di sebelah alamat situs > Izin > Lokasi > Izinkan, lalu coba lagi.';
+          } else {
+            statusEl.textContent = '❌ Gagal mengambil lokasi: ' + err.message;
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000 }
+      );
+    });
+
+    document.getElementById('btnSaveSetting').addEventListener('click', async () => {
+      const aktif = document.getElementById('fAktif').checked;
+      const lat = parseFloat(document.getElementById('fLat').value);
+      const lng = parseFloat(document.getElementById('fLng').value);
+      const radius = parseFloat(document.getElementById('fRadius').value) || 200;
+      if (aktif && (isNaN(lat) || isNaN(lng))) {
+        showToast('Isi koordinat kantor terlebih dahulu, atau gunakan tombol lokasi otomatis', 'error');
+        return;
+      }
+      showToast('Menyimpan...', 'info');
+      try {
+        const res = await apiPost('saveLocationSettings', { aktif, lat, lng, radius });
+        showToast(res.message, res.success ? 'success' : 'error');
+      } catch (err) {
+        showToast('Gagal: ' + err.message, 'error');
+      }
+    });
+
+    // ================= INIT =================
+    loadListPegawai();
+    loadAbsen();
+    loadSetting();
   </script>
 </body>
 </html>
