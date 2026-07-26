@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rekap Absensi</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-header">
+    <h1>🗂️ Rekap Absensi</h1>
+    <p id="tglHariIni">Hari ini</p>
+  </div>
+
+  <div class="nav-tabs">
+    <a href="index.html">Absen</a>
+    <a href="rekap.html" class="active">Rekap Hari Ini</a>
+    <a href="admin.html">Kelola Pegawai</a>
+    <a href="setting.html">Lokasi</a>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <button class="btn btn-outline" id="btnRefresh">🔄 Muat Ulang</button>
+      <div id="listAbsen" style="margin-top:12px;"><div class="empty-state">Memuat...</div></div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script>
+    document.getElementById('tglHariIni').textContent = new Date().toLocaleDateString('id-ID', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    async function loadData() {
+      const el = document.getElementById('listAbsen');
+      el.innerHTML = '<div class="empty-state"><span class="loader"></span> Memuat...</div>';
+      try {
+        const list = await apiGet('getTodayAttendance');
+        if (!list || list.length === 0) {
+          el.innerHTML = '<div class="empty-state">Belum ada absensi hari ini</div>';
+          return;
+        }
+        el.innerHTML = list.map(r => `
+          <div class="list-item">
+            <div>
+              <div class="name">${r.nama} <span class="pill ${r.jenis === 'Masuk' ? 'masuk' : 'pulang'}">${r.jenis}</span></div>
+              <div class="sub">${r.nip} • ${r.skpd} • ${r.bagian}</div>
+              <div class="sub">📍 ${r.alamat || '-'}</div>
+            </div>
+            <div class="sub" style="text-align:right;white-space:nowrap;">${r.waktu}</div>
+          </div>
+        `).join('');
+      } catch (err) {
+        el.innerHTML = '<div class="empty-state">Gagal memuat: ' + err.message + '</div>';
+      }
+    }
+    document.getElementById('btnRefresh').addEventListener('click', loadData);
+    loadData();
+  </script>
+</body>
+</html>

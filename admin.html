@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kelola Pegawai - Absensi Face ID</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-header">
+    <h1>⚙️ Kelola Pegawai</h1>
+    <p>Tambah pegawai baru & daftarkan wajah</p>
+  </div>
+
+  <div class="nav-tabs">
+    <a href="index.html">Absen</a>
+    <a href="rekap.html">Rekap Hari Ini</a>
+    <a href="admin.html" class="active">Kelola Pegawai</a>
+    <a href="setting.html">Lokasi</a>
+  </div>
+
+  <div class="container">
+
+    <div class="card">
+      <h3 style="margin-top:0;">Form Data Pegawai</h3>
+      <label>NIP</label>
+      <input type="text" id="fNip" placeholder="Contoh: 198501012010011001">
+      <label>Nama</label>
+      <input type="text" id="fNama" placeholder="Nama lengkap">
+      <label>SKPD</label>
+      <input type="text" id="fSkpd" placeholder="Contoh: Dinas Komunikasi dan Informatika">
+      <label>Bagian</label>
+      <input type="text" id="fBagian" placeholder="Contoh: Bidang Data dan Aplikasi">
+
+      <div id="camStartBox" style="text-align:center;padding:16px 6px;">
+        <button class="btn btn-primary" id="btnActivateCam">🔓 Aktifkan Kamera</button>
+      </div>
+
+      <div id="camBox" style="display:none;">
+        <div class="video-wrap" id="videoWrap" style="margin:12px 0;">
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="overlay" class="overlay"></canvas>
+          <div class="status-badge" id="statusBadge">Memuat model...</div>
+        </div>
+        <button class="btn btn-outline" id="btnCapture">📷 Ambil & Kenali Wajah</button>
+      </div>
+      <div id="camError" style="display:none;font-size:13px;color:#991b1b;text-align:left;line-height:1.6;margin-top:10px;"></div>
+      <div id="captureInfo" style="text-align:center;font-size:12px;margin-top:8px;color:#6b7280;"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSave">💾 Simpan Pegawai</button>
+        <button class="btn btn-outline" id="btnReset">Reset</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Daftar Pegawai Terdaftar</h3>
+      <div id="listPegawai"><div class="empty-state">Memuat...</div></div>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script>
+    const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+    const video = document.getElementById('video');
+    const statusBadge = document.getElementById('statusBadge');
+    const captureInfo = document.getElementById('captureInfo');
+    let capturedDescriptor = null;
+    let capturedFoto = null;
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show ' + (type || 'info');
+      setTimeout(() => { t.className = 'toast'; }, 3500);
+    }
+    function setStatus(text, cls) {
+      statusBadge.textContent = text;
+      statusBadge.className = 'status-badge' + (cls ? ' ' + cls : '');
+    }
+
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: 480, height: 360 }, audio: false
+        });
+        video.srcObject = stream;
+        return new Promise((resolve) => { video.onloadedmetadata = () => resolve(); });
+      } catch (err) {
+        if (err.name === 'NotAllowedError' || err.message === 'Permission denied') throw new Error('PERMISSION_DENIED_KAMERA');
+        if (err.name === 'NotFoundError') throw new Error('Kamera tidak ditemukan di perangkat ini.');
+        if (err.name === 'NotReadableError') throw new Error('Kamera sedang dipakai aplikasi lain.');
+        throw err;
+      }
+    }
+
+    function tampilkanCamError_(err) {
+      document.getElementById('camStartBox').style.display = 'block';
+      document.getElementById('camBox').style.display = 'none';
+      const el = document.getElementById('camError');
+      el.style.display = 'block';
+      if (err.message === 'PERMISSION_DENIED_KAMERA') {
+        el.innerHTML = '⚠️ <b>Izin kamera ditolak.</b><br>Ketuk ikon 🔒/ⓘ di sebelah alamat situs → Izin → Kamera → Izinkan, lalu muat ulang halaman.';
+      } else {
+        el.innerHTML = '⚠️ ' + err.message;
+      }
+    }
+
+    async function loadModels() {
+      setStatus('Memuat model AI...');
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+      setStatus('Siap - klik "Ambil & Kenali Wajah"');
+    }
+
+    function captureSnapshot() {
+      const c = document.createElement('canvas');
+      c.width = video.videoWidth;
+      c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.8);
+    }
+
+    document.getElementById('btnCapture').addEventListener('click', async () => {
+      setStatus('Mendeteksi wajah...');
+      captureInfo.textContent = 'Memproses...';
+      const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks().withFaceDescriptor();
+      if (!detection) {
+        setStatus('❌ Wajah tidak terdeteksi', 'err');
+        captureInfo.textContent = 'Pastikan wajah terlihat jelas & pencahayaan cukup, lalu coba lagi.';
+        return;
+      }
+      capturedDescriptor = Array.from(detection.descriptor);
+      capturedFoto = captureSnapshot();
+      setStatus('✅ Wajah berhasil direkam', 'ok');
+      captureInfo.textContent = 'Wajah berhasil direkam. Silakan lengkapi form lalu simpan.';
+    });
+
+    document.getElementById('btnSave').addEventListener('click', async () => {
+      const nip = document.getElementById('fNip').value.trim();
+      const nama = document.getElementById('fNama').value.trim();
+      const skpd = document.getElementById('fSkpd').value.trim();
+      const bagian = document.getElementById('fBagian').value.trim();
+      if (!nip || !nama || !skpd || !bagian) { showToast('Lengkapi semua data terlebih dahulu', 'error'); return; }
+      if (!capturedDescriptor) { showToast('Rekam wajah pegawai terlebih dahulu', 'error'); return; }
+
+      showToast('Menyimpan data...', 'info');
+      try {
+        const res = await apiPost('registerPegawai', {
+          nip, nama, skpd, bagian, descriptor: capturedDescriptor, fotoBase64: capturedFoto
+        });
+        showToast(res.message, res.success ? 'success' : 'error');
+        if (res.success) { resetForm(); loadList(); }
+      } catch (err) {
+        showToast('Gagal: ' + err.message, 'error');
+      }
+    });
+
+    function resetForm() {
+      document.getElementById('fNip').value = '';
+      document.getElementById('fNama').value = '';
+      document.getElementById('fSkpd').value = '';
+      document.getElementById('fBagian').value = '';
+      capturedDescriptor = null;
+      capturedFoto = null;
+      captureInfo.textContent = '';
+      setStatus('Siap - klik "Ambil & Kenali Wajah"');
+    }
+    document.getElementById('btnReset').addEventListener('click', resetForm);
+
+    async function loadList() {
+      const el = document.getElementById('listPegawai');
+      try {
+        const list = await apiGet('getAllPegawai');
+        if (!list || list.length === 0) {
+          el.innerHTML = '<div class="empty-state">Belum ada pegawai terdaftar</div>';
+          return;
+        }
+        el.innerHTML = list.map(p => `
+          <div class="list-item">
+            <div>
+              <div class="name">${p.nama}</div>
+              <div class="sub">${p.nip} • ${p.skpd} • ${p.bagian} ${p.descriptor ? '✅ Wajah terdaftar' : '⚠️ Belum ada wajah'}</div>
+            </div>
+            <button class="icon-btn danger" onclick="hapusPegawai('${p.nip}')">Hapus</button>
+          </div>
+        `).join('');
+      } catch (err) {
+        el.innerHTML = '<div class="empty-state">Gagal memuat: ' + err.message + '</div>';
+      }
+    }
+
+    async function hapusPegawai(nip) {
+      if (!confirm('Hapus pegawai dengan NIP ' + nip + '?')) return;
+      try {
+        const res = await apiPost('deletePegawai', { nip });
+        showToast(res.message, res.success ? 'success' : 'error');
+        loadList();
+      } catch (err) {
+        showToast('Gagal: ' + err.message, 'error');
+      }
+    }
+
+    document.getElementById('btnActivateCam').addEventListener('click', async () => {
+      document.getElementById('camError').style.display = 'none';
+      try {
+        await initCamera();
+        document.getElementById('camStartBox').style.display = 'none';
+        document.getElementById('camBox').style.display = 'block';
+        await loadModels();
+      } catch (e) {
+        tampilkanCamError_(e);
+      }
+    });
+
+    loadList();
+  </script>
+</body>
+</html>

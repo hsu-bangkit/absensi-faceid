@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Absensi Face ID</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-header">
+    <h1>📸 Absensi Face ID</h1>
+    <p>Arahkan wajah ke kamera untuk absen otomatis</p>
+  </div>
+
+  <div class="nav-tabs">
+    <a href="index.html" class="active">Absen</a>
+    <a href="rekap.html">Rekap Hari Ini</a>
+    <a href="admin.html">Kelola Pegawai</a>
+    <a href="setting.html">Lokasi</a>
+  </div>
+
+  <div class="container">
+
+    <div class="card" id="startCard">
+      <div style="text-align:center;padding:20px 6px;">
+        <div style="font-size:40px;margin-bottom:8px;">🎥</div>
+        <p style="color:#374151;font-size:14px;margin:0 0 16px;">
+          Aplikasi ini butuh izin <b>Kamera</b> dan <b>Lokasi</b> untuk mencatat absensi.
+        </p>
+        <button class="btn btn-primary" id="btnStart">🔓 Aktifkan Kamera & Lokasi</button>
+      </div>
+    </div>
+
+    <div class="card" id="mainCard" style="display:none;">
+      <div class="video-wrap" id="videoWrap">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="overlay" class="overlay"></canvas>
+        <div class="status-badge" id="statusBadge">Memuat model...</div>
+      </div>
+
+      <div id="profileBox" class="profile-box" style="display:none;">
+        <img id="profileFoto" src="" alt="foto">
+        <div class="info">
+          <b id="profileNama">-</b>
+          <span id="profileNip">NIP: -</span>
+          <span id="profileSkpd">-</span>
+          <span id="profileBagian">-</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-success" id="btnMasuk" disabled>✅ Absen Masuk</button>
+        <button class="btn btn-danger" id="btnPulang" disabled>🚪 Absen Pulang</button>
+      </div>
+      <div style="text-align:center;margin-top:10px;font-size:12px;color:#6b7280;" id="locInfo">
+        📍 Mengambil lokasi...
+      </div>
+    </div>
+
+    <div class="card" id="errorCard" style="display:none;">
+      <div style="text-align:center;padding:10px 6px;">
+        <div style="font-size:36px;margin-bottom:8px;">⚠️</div>
+        <p id="errorMsg" style="color:#991b1b;font-size:14px;margin:0 0 14px;font-weight:600;"></p>
+        <p id="errorTips" style="color:#374151;font-size:13px;text-align:left;line-height:1.6;"></p>
+        <button class="btn btn-outline" id="btnRetry" style="margin-top:10px;">🔄 Coba Lagi</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script>
+    const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const statusBadge = document.getElementById('statusBadge');
+    const profileBox = document.getElementById('profileBox');
+    const btnMasuk = document.getElementById('btnMasuk');
+    const btnPulang = document.getElementById('btnPulang');
+    const locInfo = document.getElementById('locInfo');
+
+    let pegawaiList = [];
+    let faceMatcher = null;
+    let currentMatch = null;
+    let currentPosition = null;
+    let detecting = false;
+    let stableCount = 0;
+    const STABLE_THRESHOLD = 3;
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show ' + (type || 'info');
+      setTimeout(() => { t.className = 'toast'; }, 3500);
+    }
+    function setStatus(text, cls) {
+      statusBadge.textContent = text;
+      statusBadge.className = 'status-badge' + (cls ? ' ' + cls : '');
+    }
+
+    // ---------- Lokasi ----------
+    function initLocation() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Perangkat/browser tidak mendukung GPS.'));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            locInfo.textContent = '📍 Lokasi terkunci (akurasi ' + Math.round(pos.coords.accuracy) + ' m)';
+            navigator.geolocation.watchPosition(
+              (p) => {
+                currentPosition = { lat: p.coords.latitude, lng: p.coords.longitude };
+                locInfo.textContent = '📍 Lokasi terkunci (akurasi ' + Math.round(p.coords.accuracy) + ' m)';
+              },
+              () => {},
+              { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+            );
+            resolve();
+          },
+          (err) => reject(geoErrorToMessage_(err)),
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+      });
+    }
+    function geoErrorToMessage_(err) {
+      if (err.code === 1) return new Error('PERMISSION_DENIED_LOKASI');
+      if (err.code === 2) return new Error('Lokasi tidak tersedia. Pastikan GPS/Location aktif di perangkat.');
+      return new Error('Waktu habis mengambil lokasi. Pastikan GPS aktif & sinyal bagus.');
+    }
+
+    // ---------- Kamera ----------
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: 480, height: 360 }, audio: false
+        });
+        video.srcObject = stream;
+        return new Promise((resolve) => { video.onloadedmetadata = () => resolve(); });
+      } catch (err) {
+        if (err.name === 'NotAllowedError' || err.message === 'Permission denied') throw new Error('PERMISSION_DENIED_KAMERA');
+        if (err.name === 'NotFoundError') throw new Error('Kamera tidak ditemukan di perangkat ini.');
+        if (err.name === 'NotReadableError') throw new Error('Kamera sedang dipakai aplikasi lain.');
+        throw err;
+      }
+    }
+
+    function tampilkanError_(err) {
+      document.getElementById('startCard').style.display = 'none';
+      document.getElementById('mainCard').style.display = 'none';
+      document.getElementById('errorCard').style.display = 'block';
+      const msgEl = document.getElementById('errorMsg');
+      const tipsEl = document.getElementById('errorTips');
+      if (err.message === 'PERMISSION_DENIED_KAMERA') {
+        msgEl.textContent = 'Izin kamera ditolak.';
+        tipsEl.innerHTML = 'Ketuk ikon 🔒/ⓘ di sebelah alamat situs → Izin → Kamera → Izinkan, lalu muat ulang halaman.';
+      } else if (err.message === 'PERMISSION_DENIED_LOKASI') {
+        msgEl.textContent = 'Izin lokasi ditolak.';
+        tipsEl.innerHTML = 'Ketuk ikon 🔒/ⓘ di sebelah alamat situs → Izin → Lokasi → Izinkan, pastikan GPS aktif, lalu muat ulang halaman.';
+      } else {
+        msgEl.textContent = err.message || 'Terjadi kesalahan.';
+        tipsEl.textContent = 'Pastikan koneksi internet stabil, lalu coba lagi.';
+      }
+    }
+
+    async function loadModels() {
+      setStatus('Memuat model AI...');
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+    }
+
+    async function loadPegawai() {
+      setStatus('Memuat data pegawai...');
+      const list = await apiGet('getAllPegawai');
+      pegawaiList = (list || []).filter(p => p.descriptor && p.descriptor.length === 128);
+      if (pegawaiList.length === 0) {
+        setStatus('Belum ada wajah terdaftar', 'err');
+        return;
+      }
+      const labeled = pegawaiList.map(p => new faceapi.LabeledFaceDescriptors(p.nip, [new Float32Array(p.descriptor)]));
+      faceMatcher = new faceapi.FaceMatcher(labeled, 0.5);
+    }
+
+    function resetProfile() {
+      profileBox.style.display = 'none';
+      btnMasuk.disabled = true;
+      btnPulang.disabled = true;
+      currentMatch = null;
+      stableCount = 0;
+    }
+    function showProfile(pegawai) {
+      document.getElementById('profileFoto').src = pegawai.foto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(pegawai.nama);
+      document.getElementById('profileNama').textContent = pegawai.nama;
+      document.getElementById('profileNip').textContent = 'NIP: ' + pegawai.nip;
+      document.getElementById('profileSkpd').textContent = pegawai.skpd;
+      document.getElementById('profileBagian').textContent = pegawai.bagian;
+      profileBox.style.display = 'flex';
+      btnMasuk.disabled = false;
+      btnPulang.disabled = false;
+    }
+
+    async function detectLoop() {
+      if (detecting) { requestAnimationFrame(detectLoop); return; }
+      detecting = true;
+      const displaySize = { width: video.clientWidth, height: video.clientHeight };
+      faceapi.matchDimensions(overlay, displaySize);
+      try {
+        const detection = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+        if (detection && faceMatcher) {
+          const resized = faceapi.resizeResults(detection, displaySize);
+          new faceapi.draw.DrawBox(resized.detection.box, { label: '', boxColor: '#22c55e' }).draw(overlay);
+          const best = faceMatcher.findBestMatch(detection.descriptor);
+          if (best.label !== 'unknown') {
+            const pegawai = pegawaiList.find(p => p.nip === best.label);
+            setStatus('✅ Wajah dikenali', 'ok');
+            if (currentMatch && currentMatch.nip === pegawai.nip) { stableCount++; }
+            else { currentMatch = pegawai; stableCount = 1; }
+            if (stableCount >= STABLE_THRESHOLD) showProfile(pegawai);
+          } else {
+            setStatus('⚠️ Wajah tidak dikenali', 'err');
+            resetProfile();
+          }
+        } else if (detection) {
+          setStatus('Mendeteksi wajah...');
+        } else {
+          setStatus('Arahkan wajah ke kamera');
+          resetProfile();
+        }
+      } catch (e) { console.error(e); }
+      detecting = false;
+      requestAnimationFrame(detectLoop);
+    }
+
+    function captureSnapshot() {
+      const c = document.createElement('canvas');
+      c.width = video.videoWidth;
+      c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.7);
+    }
+
+    async function kirimAbsen(jenis) {
+      if (!currentMatch) { showToast('Wajah belum dikenali', 'error'); return; }
+      if (!currentPosition) { showToast('Lokasi belum siap, tunggu sebentar', 'error'); return; }
+      btnMasuk.disabled = true;
+      btnPulang.disabled = true;
+      showToast('Mengirim absen ' + jenis + '...', 'info');
+      const payload = {
+        nip: currentMatch.nip, nama: currentMatch.nama, skpd: currentMatch.skpd, bagian: currentMatch.bagian,
+        jenis: jenis, lat: currentPosition.lat, lng: currentPosition.lng, fotoBase64: captureSnapshot()
+      };
+      try {
+        const res = await apiPost('recordAttendance', payload);
+        if (res.success) showToast(res.message + (res.waktu ? ' (' + res.waktu + ')' : ''), 'success');
+        else showToast(res.message, 'error');
+      } catch (err) {
+        showToast('Gagal mengirim: ' + err.message, 'error');
+      }
+      resetProfile();
+    }
+
+    btnMasuk.addEventListener('click', () => kirimAbsen('Masuk'));
+    btnPulang.addEventListener('click', () => kirimAbsen('Pulang'));
+
+    async function mulaiAplikasi() {
+      document.getElementById('startCard').style.display = 'none';
+      document.getElementById('errorCard').style.display = 'none';
+      document.getElementById('mainCard').style.display = 'block';
+      setStatus('Meminta izin kamera...');
+      try {
+        await initCamera();
+        setStatus('Meminta izin lokasi...');
+        await initLocation();
+        await loadModels();
+        await loadPegawai();
+        setStatus('Arahkan wajah ke kamera');
+        detectLoop();
+      } catch (e) {
+        tampilkanError_(e);
+      }
+    }
+    document.getElementById('btnStart').addEventListener('click', mulaiAplikasi);
+    document.getElementById('btnRetry').addEventListener('click', mulaiAplikasi);
+  </script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pengaturan Lokasi</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-header">
+    <h1>📍 Pengaturan Lokasi</h1>
+    <p>Atur titik lokasi kantor & radius absen yang diizinkan</p>
+  </div>
+
+  <div class="nav-tabs">
+    <a href="index.html">Absen</a>
+    <a href="rekap.html">Rekap</a>
+    <a href="admin.html">Pegawai</a>
+    <a href="setting.html" class="active">Lokasi</a>
+  </div>
+
+  <div class="container">
+
+    <div class="card">
+      <label style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="fAktif" style="width:auto;margin:0;"> Batasi absen hanya di sekitar kantor
+      </label>
+      <p style="font-size:12px;color:#6b7280;margin-top:-4px;">
+        Jika dimatikan, pegawai bisa absen dari lokasi mana saja (lokasi tetap dicatat di rekap).
+      </p>
+
+      <div id="lokasiFields">
+        <label>Latitude Kantor</label>
+        <input type="text" id="fLat" placeholder="Contoh: -3.453500">
+        <label>Longitude Kantor</label>
+        <input type="text" id="fLng" placeholder="Contoh: 114.838500">
+        <label>Radius Diizinkan (meter)</label>
+        <input type="number" id="fRadius" value="200" min="10" step="10">
+        <button class="btn btn-outline" id="btnUseMyLoc">📍 Gunakan Lokasi Saya Sekarang</button>
+        <div id="locStatus" style="font-size:12px;color:#6b7280;margin-top:8px;text-align:center;"></div>
+      </div>
+
+      <button class="btn btn-primary" id="btnSaveSetting" style="margin-top:14px;">💾 Simpan Pengaturan</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Cara Menentukan Titik Kantor</h3>
+      <ol style="font-size:13px;color:#374151;padding-left:18px;line-height:1.7;">
+        <li>Buka halaman ini <b>dari lokasi kantor</b> menggunakan HP Anda.</li>
+        <li>Klik tombol <b>"Gunakan Lokasi Saya Sekarang"</b> — koordinat akan otomatis terisi.</li>
+        <li>Atur radius sesuai luas area kantor (misal 100-300 meter).</li>
+        <li>Klik <b>Simpan Pengaturan</b>.</li>
+      </ol>
+      <p style="font-size:12px;color:#6b7280;">
+        Alternatif: cari koordinat lewat Google Maps → tekan lama titik lokasi kantor → salin angka koordinat yang muncul → tempel ke kolom Latitude/Longitude di atas.
+      </p>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="config.js"></script>
+  <script>
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show ' + (type || 'info');
+      setTimeout(() => { t.className = 'toast'; }, 3500);
+    }
+    function toggleFields() {
+      document.getElementById('lokasiFields').style.display = document.getElementById('fAktif').checked ? 'block' : 'none';
+    }
+    document.getElementById('fAktif').addEventListener('change', toggleFields);
+
+    async function loadSetting() {
+      try {
+        const s = await apiGet('getLocationSettings');
+        document.getElementById('fAktif').checked = !!s.aktif;
+        if (s.lat) document.getElementById('fLat').value = s.lat;
+        if (s.lng) document.getElementById('fLng').value = s.lng;
+        document.getElementById('fRadius').value = s.radius || 200;
+        toggleFields();
+      } catch (err) {
+        showToast('Gagal memuat pengaturan: ' + err.message, 'error');
+      }
+    }
+
+    document.getElementById('btnUseMyLoc').addEventListener('click', () => {
+      const statusEl = document.getElementById('locStatus');
+      if (!navigator.geolocation) { statusEl.textContent = 'Perangkat tidak mendukung GPS.'; return; }
+      statusEl.innerHTML = '<span class="loader"></span> Mengambil lokasi...';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          document.getElementById('fLat').value = pos.coords.latitude.toFixed(6);
+          document.getElementById('fLng').value = pos.coords.longitude.toFixed(6);
+          statusEl.textContent = '✅ Lokasi berhasil diambil (akurasi ' + Math.round(pos.coords.accuracy) + ' m)';
+        },
+        (err) => {
+          if (err.code === 1) {
+            statusEl.textContent = '❌ Izin lokasi ditolak. Ketuk ikon 🔒/ⓘ di sebelah alamat situs > Izin > Lokasi > Izinkan, lalu coba lagi.';
+          } else {
+            statusEl.textContent = '❌ Gagal mengambil lokasi: ' + err.message;
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000 }
+      );
+    });
+
+    document.getElementById('btnSaveSetting').addEventListener('click', async () => {
+      const aktif = document.getElementById('fAktif').checked;
+      const lat = parseFloat(document.getElementById('fLat').value);
+      const lng = parseFloat(document.getElementById('fLng').value);
+      const radius = parseFloat(document.getElementById('fRadius').value) || 200;
+      if (aktif && (isNaN(lat) || isNaN(lng))) {
+        showToast('Isi koordinat kantor terlebih dahulu, atau gunakan tombol lokasi otomatis', 'error');
+        return;
+      }
+      showToast('Menyimpan...', 'info');
+      try {
+        const res = await apiPost('saveLocationSettings', { aktif, lat, lng, radius });
+        showToast(res.message, res.success ? 'success' : 'error');
+      } catch (err) {
+        showToast('Gagal: ' + err.message, 'error');
+      }
+    });
+
+    loadSetting();
+  </script>
+</body>
+</html>
